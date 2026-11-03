@@ -1,0 +1,9 @@
+node_modules/
+.next/
+.env
+.env.local
+coverage/
+*.tsbuildinfo
+.npm-cache/
+.mongodb-binaries/
+.mongo-data/

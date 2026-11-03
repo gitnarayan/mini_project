@@ -1,0 +1,68 @@
+import { before, after, test } from 'node:test';
+import assert from 'node:assert/strict';
+import mongoose from 'mongoose';
+import { MongoMemoryServer } from 'mongodb-memory-server';
+import request from 'supertest';
+import jwt from 'jsonwebtoken';
+import { createApp } from '../src/app.js';
+import { User, Project } from '../src/models.js';
+const secret = 'test-secret-only-at-least-32-characters';
+const origin = 'http://localhost:3000';
+let db, app, alice, bob, projectId, taskId;
+const send = (agent, method, url, body) => agent[method](url).set('Origin', origin).send(body);
+before(async () => {
+  db = await MongoMemoryServer.create();
+  await mongoose.connect(db.getUri()); await User.init();
+  app = createApp({ jwtSecret: secret }); alice = request.agent(app); bob = request.agent(app);
+});
+after(async () => { await mongoose.disconnect(); if (db) await db.stop(); });
+test('authentication: hashing, duplicate emails, bad passwords, protected API', async () => {
+  await request(app).get('/api/projects').expect(401);
+  const signup = await send(alice, 'post', '/api/auth/signup', { email: 'Alice@example.com', password: 'StrongPass123!' }).expect(201);
+  assert.equal(signup.body.email, 'alice@example.com'); assert.equal(signup.body.passwordHash, undefined);
+  assert.match(signup.headers['set-cookie'][0], /HttpOnly/);
+  const stored = await User.findOne({ email: 'alice@example.com' }).select('+passwordHash'); assert.notEqual(stored.passwordHash, 'StrongPass123!');
+  await send(request(app), 'post', '/api/auth/signup', { email: 'alice@example.com', password: 'StrongPass123!' }).expect(409);
+  await send(request(app), 'post', '/api/auth/login', { email: 'alice@example.com', password: 'WrongPass123!' }).expect(401);
+  await send(bob, 'post', '/api/auth/signup', { email: 'bob@example.com', password: 'StrongPass123!' }).expect(201);
+  await alice.get('/api/auth/me').expect(200);
+});
+test('project creation, validation and ownership isolation', async () => {
+  await send(alice, 'post', '/api/projects', { title: ' ' }).expect(400);
+  const p = await send(alice, 'post', '/api/projects', { title: 'Launch website', description: 'Our first milestone' }).expect(201); projectId = p.body._id;
+  await bob.get(`/api/projects/${projectId}`).expect(404);
+  await send(bob, 'patch', `/api/projects/${projectId}`, { title: 'stolen' }).expect(404);
+  await send(bob, 'delete', `/api/projects/${projectId}`).expect(404);
+  assert.equal((await bob.get('/api/projects')).body.length, 0);
+  await send(alice, 'patch', `/api/projects/${projectId}`, { title: 'Website launch' }).expect(200);
+});
+test('tasks: CRUD, filters, sorting, validation and cross-user isolation', async () => {
+  const url = `/api/projects/${projectId}/tasks`;
+  const t = await send(alice, 'post', url, { title: 'Design', dueDate: '2026-11-12' }).expect(201); taskId = t.body._id;
+  await send(alice, 'post', url, { title: 'Plan', dueDate: '2026-11-10', status: 'done' }).expect(201);
+  await send(alice, 'post', url, { title: 'Bad date', dueDate: '2026-02-30' }).expect(400);
+  await send(alice, 'patch', `${url}/${taskId}`, { status: 'invalid' }).expect(400);
+  await bob.get(url).expect(404);
+  await send(bob, 'post', url, { title: 'Intruder', dueDate: '2026-11-12' }).expect(404);
+  await send(bob, 'patch', `${url}/${taskId}`, { status: 'done' }).expect(404);
+  await send(bob, 'delete', `${url}/${taskId}`).expect(404);
+  const sorted = await alice.get(url).expect(200); assert.equal(sorted.body[0].title, 'Plan');
+  const filtered = await alice.get(`${url}?status=todo&dueFrom=2026-11-11&dueTo=2026-11-13`).expect(200); assert.equal(filtered.body.length, 1);
+  const ranks = await alice.get(`${url}?sortBy=status&order=asc`).expect(200); assert.equal(ranks.body[0].status, 'todo');
+  await alice.get(`${url}?sortBy=ownerId`).expect(400);
+  await send(alice, 'patch', `${url}/${taskId}`, { status: 'in-progress' }).expect(200);
+  const summary = await alice.get('/api/projects'); assert.equal(summary.body[0].taskCount, 2); assert.equal(summary.body[0].doneCount, 1);
+  await send(alice, 'delete', `${url}/${taskId}`).expect(204);
+  await send(alice, 'patch', `${url}/${taskId}`, { status: 'done' }).expect(404);
+});
+test('CSRF origin, tampered/expired JWT, malformed IDs and logout', async () => {
+  await alice.post('/api/projects').set('Origin', 'https://evil.example').send({ title: 'Bad' }).expect(403);
+  await alice.get('/api/projects/not-an-id').expect(400);
+  await request(app).get('/api/projects').set('Cookie', 'session=invalid').expect(401);
+  const token = jwt.sign({}, secret, { subject: new mongoose.Types.ObjectId().toString(), expiresIn: -1, issuer: 'mini-project-manager', audience: 'mini-project-manager' });
+  await request(app).get('/api/projects').set('Cookie', `session=${token}`).expect(401);
+  await send(alice, 'delete', `/api/projects/${projectId}`).expect(204); assert.equal(await Project.countDocuments(), 0);
+  await send(alice, 'post', '/api/auth/logout').expect(204);
+  await alice.get('/api/auth/me').expect(401);
+  await send(alice, 'post', '/api/auth/login', { email: 'alice@example.com', password: 'StrongPass123!' }).expect(200);
+});

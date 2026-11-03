@@ -1,0 +1,1 @@
+{"name":"mini-project-manager","private":true,"workspaces":["frontend","backend"],"scripts":{"dev":"concurrently -n api,web -c green,blue \"npm run dev -w backend\" \"npm run dev -w frontend\"","build":"npm run build -w frontend","test":"npm test -w backend","typecheck":"npm run typecheck -w frontend"},"devDependencies":{"concurrently":"^9.2.0"}}
