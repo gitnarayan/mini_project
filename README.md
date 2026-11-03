@@ -85,6 +85,8 @@ API integration tests use a real isolated MongoDB process through mongodb-memory
 
 ## Production
 
+For the intended hosting setup, follow [Vercel frontend + Railway backend](docs/DEPLOYMENT.md). The repository includes a backend Dockerfile and Railway healthcheck configuration.
+
 Deploy the frontend to a Node-compatible Next.js host and the Express backend to a Node.js host with connectivity to MongoDB Atlas. Configure the environment variables above before building. Use HTTPS and set `NODE_ENV=production` on the backend. Set `CLIENT_ORIGIN` to the exact public frontend origin and `BACKEND_URL` to the reachable backend URL. Browser requests stay same-origin through the Next.js `/api` rewrite. Run `npm run build`, then `npm run start -w frontend` and `npm run start -w backend` in their respective services.
 
 Do not deploy this as static-only hosting. JWTs expire after eight hours; logout clears the browser cookie. Individual stolen tokens are not revoked before expiration. Production at scale should add session revocation, shared rate-limit storage and monitoring.
