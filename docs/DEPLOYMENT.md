@@ -6,7 +6,10 @@ Use MongoDB Atlas for the deployed backend. Localhost on Railway refers to the R
 
 ## 2. Vercel backend
 
-Create a second Vercel project from the same GitHub repository and set Root Directory to `backend`. Vercel treats [backend/api/index.js](../backend/api/index.js) as a serverless Express handler.
+Create a second Vercel project from the same GitHub repository and set Root Directory to `backend`.
+Set the Framework Preset to **Other**. The backend configuration is detected from
+`backend/vercel.json`, and Vercel treats `backend/api/index.js` as a serverless Express
+handler.
 
 Set service variables:
 
@@ -24,7 +27,9 @@ Deploy the backend project and record its HTTPS domain. `/api/health` should ret
 
 ## 3. Vercel frontend
 
-Import the same repository, select Next.js, and set Root Directory to frontend. Enable inclusion of source files outside the root directory if required for npm workspaces. Keep the standard Next.js build/output settings; do not select static export.
+Import the same repository, select Next.js, and set Root Directory to `frontend`. Select
+the Next.js Framework Preset and do not select static export. If Next.js cannot resolve
+workspace dependencies, enable "Include source files outside Root Directory".
 
 Set BACKEND_URL to the Vercel backend HTTPS origin, without a trailing slash or `/api`.
 Example: `https://mini-project-api.vercel.app`. It is a server-side setting, not
