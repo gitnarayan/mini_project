@@ -36,6 +36,10 @@ Example: `https://mini-project-api.vercel.app`. It is a server-side setting, not
 `NEXT_PUBLIC_BACKEND_URL`. Deploy after setting this value because rewrites are
 configured at build time.
 
+The value must be the backend Vercel project domain, not the frontend domain. Verify the
+backend directly at `https://<backend-domain>/api/health`, then redeploy the frontend. A
+frontend `/api/*` 404 commonly means `BACKEND_URL` was missing or points to the frontend.
+
 ## 4. Match the origins
 
 Set the backend `CLIENT_ORIGIN` to the exact final frontend Vercel production
@@ -49,6 +53,6 @@ are enabled by `NODE_ENV=production`.
 
 ## 5. Verify
 
-On the Vercel URL: signup, logout, login, create a project, add/edit/delete tasks, filter/sort tasks, then refresh to verify persistence. Test a second account to confirm project isolation. /api/health on both domains should respond successfully. A 403 Untrusted request origin means CLIENT_ORIGIN does not exactly match the browser origin. A proxy connection error means BACKEND_URL or the Railway service is unavailable.
+On the Vercel URL: signup, logout, login, create a project, add/edit/delete tasks, filter/sort tasks, then refresh to verify persistence. Test a second account to confirm project isolation. /api/health on both domains should respond successfully. A 403 Untrusted request origin means CLIENT_ORIGIN does not exactly match the browser origin. A proxy connection error means BACKEND_URL or the backend service is unavailable.
 
 These files prepare deployment; they do not create hosted services or provide an Atlas database. Check each platform's account/plan requirements before provisioning.
